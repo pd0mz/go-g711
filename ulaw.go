@@ -1,86 +1,32 @@
 package g711
 
-const Bias = 0x84 // Bias for linear code
-
-var µ2a = []uint8{
-	0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x04, 0x04,
-	0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 0x08, 0x08,
-	0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-	0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-	0x19, 0x1b, 0x1d, 0x1f, 0x21, 0x22, 0x23, 0x24,
-	0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c,
-	0x2e, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36,
-	0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e,
-	0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-	0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
-	0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58,
-	0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60,
-	0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
-	0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70,
-	0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78,
-	0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80,
+// MLawEncode encodes a slice of PCM16 samples to μ-law.
+func MLawEncode(in []int16) []uint8 {
+	out := make([]uint8, len(in))
+	for i, s := range in {
+		out[i] = MLawEncodeSample(s)
+	}
+	return out
 }
 
-/* ToMlaw compresses a 16-bit signed PCM sample to an µLaw byte.
- *
- * Biased Code  Compressed Code
- * ------------- ---------------
- * 00000001wxyza 000wxyz
- * 0000001wxyzab 001wxyz
- * 000001wxyzabc 010wxyz
- * 00001wxyzabcd 011wxyz
- * 0001wxyzabcde 100wxyz
- * 001wxyzabcdef 101wxyz
- * 01wxyzabcdefg 110wxyz
- * 1wxyzabcdefgh 111wxyz
- */
-func ToMLaw(pcm int16) uint8 {
-	var (
-		seg        uint16
-		uval, mask uint8
-	)
-
-	if pcm < 0 {
-		pcm = Bias - pcm
-		mask = 0x7f
-	} else {
-		pcm = Bias + pcm
-		mask = 0xff
+// MLawDecode decodes a slice of μ-law samples to PCM16.
+func MLawDecode(in []uint8) []int16 {
+	out := make([]int16, len(in))
+	for i, s := range in {
+		out[i] = MLawDecodeSample(s)
 	}
-
-	/* Convert the scaled magnitude to segment number. */
-	seg = search(uint16(pcm), segEnd, 8)
-
-	if seg >= 8 {
-		/* out of range, return maximum value. */
-		uval = 0x7f
-	} else {
-		uval = uint8(seg<<4) | uint8((uint16(pcm)>>(seg+3))&0x0f)
-	}
-
-	return uval ^ mask
+	return out
 }
 
-// FromMlaw decompresses an µLaw byte to a 16-bit signed PCM sample.
-func FromMLaw(val uint8) int16 {
-	var t int16
-
-	/* Complement to obtain normal µLaw value. */
-	val = ^val
-	t = (int16((val)&QuantMask) << 3) + Bias
-	t <<= (val & SegMask) >> SegShift
-
-	if val&SignBit == SignBit {
-		return Bias - t
+// MLawEncodeSample encodes a PCM16 sample to μ-law.
+func MLawEncodeSample(s int16) uint8 {
+	if s >= 0 {
+		return μLawCompressTable[s>>2]
 	}
-	return t - Bias
+	return 0x7f & μLawCompressTable[-s>>2]
 }
 
-// Convert an µLaw byte to an aLaw byte
-func MLawToALaw(val uint8) uint8 {
-	val &= 0xff
-	if val&0x80 == 0x80 {
-		return 0xd5 ^ (µ2a[0xff^val] - 1)
-	}
-	return 0x55 ^ (µ2a[0x7f^val] - 1)
+// MLawDecodeSample decodes an μ-law sample to PCM16.
+func MLawDecodeSample(s uint8) int16 {
+	return μLawDecompressTable[s]
 }
