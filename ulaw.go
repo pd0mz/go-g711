@@ -29,7 +29,7 @@ func MLawEncodeSample(s int16) uint8 {
 	if s >= 0 {
 		return μLawCompressTable[s>>4]
 	}
-	return 0x7f & μLawCompressTable[-s>>4]
+	return 0x7f & μLawCompressTable[-int(s)>>4]
 }
 
 // MLawDecodeSample decodes an μ-law sample to PCM16.
